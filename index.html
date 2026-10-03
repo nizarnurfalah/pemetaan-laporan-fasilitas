@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS Pemetaan Laporan Fasilitas Umum - Live Demo</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- CSS Dependencies -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #475569;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #06b6d4;
+            --dark: #0f172a;
+            --light-bg: #f8fafc;
+            --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--light-bg);
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            height: 70px;
+            z-index: 1000;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: #ffffff !important;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge-portfolio {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* Map Container */
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 70px);
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Floating Filter & Stats Widget */
+        .floating-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            width: 320px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        .floating-panel.collapsed {
+            transform: translateX(-340px);
+        }
+
+        .toggle-panel-btn {
+            position: absolute;
+            top: 20px;
+            left: 350px;
+            z-index: 999;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 10px 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: left 0.3s ease;
+        }
+
+        .floating-panel.collapsed + .toggle-panel-btn {
+            left: 20px;
+        }
+
+        .stat-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Custom Markers */
+        .custom-div-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            color: white;
+            font-size: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 2px solid white;
+            transition: transform 0.2s;
+        }
+        .custom-div-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .marker-jalan { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .marker-lampu { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .marker-drainase { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .marker-jembatan { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .marker-lainnya { background: linear-gradient(135deg, #10b981, #059669); }
+
+        /* Slide-in Report Panel */
+        .slide-panel {
+            position: fixed;
+            top: 70px;
+            right: -450px;
+            width: 430px;
+            max-width: 90vw;
+            height: calc(100vh - 70px);
+            background: #ffffff;
+            box-shadow: -5px 0 25px rgba(0,0,0,0.15);
+            z-index: 1050;
+            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slide-panel.active {
+            right: 0;
+        }
+
+        .slide-panel-header {
+            padding: 20px;
+            background: #0f172a;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .slide-panel-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Banner Location Picker Mode */
+        .location-picker-banner {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+            background: #2563eb;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 30px;
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: none;
+            animation: bounceIn 0.4s ease;
+        }
+
+        @keyframes bounceIn {
+            0% { opacity: 0; transform: translate(-50%, -20px); }
+            100% { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        /* Admin Modal Fullscreen Styling */
+        .admin-modal .modal-content {
+            border-radius: 20px;
+            border: none;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .stat-card {
+            border-radius: 14px;
+            padding: 18px;
+            color: white;
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Popup styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+        }
+        .leaflet-popup-content {
+            margin: 0;
+            line-height: 1.5;
+            width: 280px !important;
+        }
+        .popup-img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            background: #e2e8f0;
+        }
+        .popup-body {
+            padding: 16px;
+        }
+
+        .badge-status-Baru { background-color: #ef4444; color: white; }
+        .badge-status-Diproses { background-color: #f59e0b; color: white; }
+        .badge-status-Dijadwalkan { background-color: #3b82f6; color: white; }
+        .badge-status-Selesai { background-color: #10b981; color: white; }
+
+        .badge-priority-tinggi { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+        .badge-priority-sedang { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .badge-priority-rendah { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-custom px-3">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-map-marked-alt text-primary fs-4"></i>
+                <div>
+                    <span class="d-block" style="font-size: 1.05rem;">WebGIS Laporan Fasilitas</span>
+                    <small class="text-white-50" style="font-size: 0.7rem;">Sistem Pemetaan & Pengaduan Fasilitas Publik</small>
+                </div>
+                <span class="badge-portfolio ms-2 d-none d-md-inline-block">Live Portfolio Demo</span>
+            </a>
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-primary btn-sm px-3 rounded-pill fw-semibold shadow-sm" onclick="openLaporPanel()">
+                    <i class="fas fa-plus-circle me-1"></i> Buat Laporan
+                </button>
+                <button class="btn btn-outline-light btn-sm px-3 rounded-pill" onclick="openLaporanSayaModal()">
+                    <i class="fas fa-search me-1"></i> Cek Laporan
+                </button>
+                <button class="btn btn-warning btn-sm px-3 rounded-pill fw-semibold text-dark shadow-sm" onclick="openAdminModal()">
+                    <i class="fas fa-user-shield me-1"></i> Panel Admin
+                </button>
+                <button class="btn btn-outline-secondary btn-sm px-2 text-white border-0" onclick="resetDemoData()" title="Reset Data Demo">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN MAP AREA -->
+    <div id="map-container">
+        <!-- Banner Mode Pilih Titik -->
+        <div id="locationPickerBanner" class="location-picker-banner">
+            <i class="fas fa-crosshairs me-2"></i> Klik pada peta untuk menentukan lokasi kerusakan!
+        </div>
+
+        <!-- Floating Filter & Layer Widget -->
+        <div id="floatingPanel" class="floating-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="fas fa-filter text-primary me-2"></i>Filter Laporan
+                </h6>
+                <span class="badge bg-dark rounded-pill" id="totalCountBadge">0 Data</span>
+            </div>
+
+            <!-- Search Box -->
+            <div class="input-group input-group-sm mb-3">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Cari jalan / jenis..." oninput="filterMarkers()">
+            </div>
+
+            <!-- Filter Kategori -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted mb-1">Kategori Kerusakan</label>
+                <select id="filterCategory" class="form-select form-select-sm" onchange="filterMarkers()">
+                    <option value="ALL">Semua Kategori</option>
+                    <option value="Jalan Berlubang">Jalan Berlubang</option>
+                    <option value="Lampu Penerangan Jalan (PJU)">Lampu PJU Rusak</option>
+                    <option value="Trotoar / Drainase Rusak">Trotoar & Drainase</option>
+                    <option value="Jembatan Rusak">Jembatan Rusak</option>
+                    <option value="Fasilitas Publik Lainnya">Fasilitas Lainnya</option>
+                </select>
+            </div>
+
+            <!-- Filter Status -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted mb-1">Status Penanganan</label>
+                <select id="filterStatus" class="form-select form-select-sm" onchange="filterMarkers()">
+                    <option value="ALL">Semua Status</option>
+                    <option value="Baru">🔴 Baru</option>
+                    <option value="Diproses">🟠 Diproses</option>
+                    <option value="Dijadwalkan">🔵 Dijadwalkan</option>
+                    <option value="Selesai">🟢 Selesai</option>
+                </select>
+            </div>
+
+            <!-- Legend -->
+            <hr class="my-2">
+            <label class="small fw-bold text-muted mb-2 d-block">Legenda Kategori</label>
+            <div class="d-flex flex-column gap-1 small">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="custom-div-marker marker-jalan" style="width: 20px; height: 20px; font-size: 10px;"><i class="fas fa-road"></i></span>
+                    <span>Jalan Berlubang / Rusak</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="custom-div-marker marker-lampu" style="width: 20px; height: 20px; font-size: 10px;"><i class="fas fa-lightbulb"></i></span>
+                    <span>Lampu Jalan / PJU</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="custom-div-marker marker-drainase" style="width: 20px; height: 20px; font-size: 10px;"><i class="fas fa-water"></i></span>
+                    <span>Drainase & Trotoar</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="custom-div-marker marker-jembatan" style="width: 20px; height: 20px; font-size: 10px;"><i class="fas fa-archway"></i></span>
+                    <span>Jembatan</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="custom-div-marker marker-lainnya" style="width: 20px; height: 20px; font-size: 10px;"><i class="fas fa-landmark"></i></span>
+                    <span>Fasilitas Publik Lainnya</span>
+                </div>
+            </div>
+        </div>
+
+        <button class="toggle-panel-btn" onclick="toggleFloatingPanel()" title="Sembunyikan/Tampilkan Filter">
+            <i class="fas fa-bars"></i>
+        </button>
+
+        <!-- Leaflet Map Element -->
+        <div id="map"></div>
+    </div>
+
+    <!-- SLIDE PANEL: FORM BUAT LAPORAN -->
+    <div id="slidePanel" class="slide-panel">
+        <div class="slide-panel-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-file-signature text-warning fs-5"></i>
+                <h6 class="mb-0 fw-bold">Buat Laporan Kerusakan</h6>
+            </div>
+            <button class="btn btn-sm text-white-50 border-0 fs-5" onclick="closeLaporPanel()">&times;</button>
+        </div>
+        <div class="slide-panel-body">
+            <form id="formLapor" onsubmit="handleFormSubmit(event)">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Email Pelapor <span class="text-danger">*</span></label>
+                    <input type="email" id="emailInput" class="form-control form-control-sm" placeholder="contoh@gmail.com" required>
+                    <small class="text-muted" style="font-size: 0.75rem;">Untuk mengecek status progres tindak lanjut.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Jenis Kerusakan <span class="text-danger">*</span></label>
+                    <select id="jenisInput" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih Jenis Fasilitas --</option>
+                        <option value="Jalan Berlubang">Jalan Berlubang / Aspal Rusak</option>
+                        <option value="Lampu Penerangan Jalan (PJU)">Lampu Penerangan Jalan Mati</option>
+                        <option value="Trotoar / Drainase Rusak">Trotoar Rusak / Selokan Tersumbat</option>
+                        <option value="Jembatan Rusak">Jembatan / Pembatas Retak</option>
+                        <option value="Fasilitas Publik Lainnya">Fasilitas Publik Lainnya</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Deskripsi & Patokan Lokasi <span class="text-danger">*</span></label>
+                    <textarea id="deskripsiInput" class="form-control form-control-sm" rows="3" placeholder="Jelaskan kondisi kerusakan dan alamat detail..." required></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Titik Koordinat Lokasi <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" onclick="activateLocationPicker()">
+                            <i class="fas fa-map-pin me-1"></i> Pilih di Peta
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm flex-fill" onclick="getCurrentGPS()">
+                            <i class="fas fa-crosshairs me-1"></i> Gunakan GPS
+                        </button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="text" id="latInput" class="form-control form-control-sm bg-light" placeholder="Latitude" readonly required>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="lngInput" class="form-control form-control-sm bg-light" placeholder="Longitude" readonly required>
+                        </div>
+                    </div>
+                    <small id="coordHelp" class="text-success small d-none"><i class="fas fa-check-circle"></i> Titik koordinat dipilih!</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Foto Bukti Kerusakan</label>
+                    <input type="file" id="fotoInput" class="form-control form-control-sm" accept="image/*" onchange="previewImage(event)">
+                    <div class="mt-2 text-center">
+                        <img id="imagePreview" class="img-fluid rounded border d-none" style="max-height: 140px; object-fit: cover;" alt="Preview Foto">
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 pt-2">
+                    <button type="submit" class="btn btn-primary btn-sm py-2 fw-bold">
+                        <i class="fas fa-paper-plane me-1"></i> Kirim Laporan
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm text-secondary" onclick="closeLaporPanel()">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CEK LAPORAN SAYA -->
+    <div class="modal fade" id="laporanSayaModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-dark text-white rounded-top-4">
+                    <h6 class="modal-title fw-bold"><i class="fas fa-search me-2 text-primary"></i>Cek Status Laporan Saya</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="input-group mb-4">
+                        <input type="email" id="searchEmailInput" class="form-control" placeholder="Ketik email yang digunakan saat melapor..." value="contohkasusjalan1@gmail.com">
+                        <button class="btn btn-primary px-4 fw-semibold" onclick="searchUserReports()">Cari Laporan</button>
+                    </div>
+                    <div id="userReportsResult">
+                        <!-- Hasil pencarian laporan di-inject via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADMIN DASHBOARD DEMO -->
+    <div class="modal fade admin-modal" id="adminModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white p-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="bg-warning text-dark px-2 py-1 rounded fw-bold small">DEMO</div>
+                        <h5 class="modal-title fw-bold mb-0">Dashboard Manajemen Laporan (Admin Panel)</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    
+                    <!-- Stats Cards -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3 col-6">
+                            <div class="stat-card bg-primary shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="small opacity-75 fw-semibold">Total Laporan</div>
+                                        <h3 class="fw-bold mb-0 mt-1" id="adminStatTotal">0</h3>
+                                    </div>
+                                    <i class="fas fa-clipboard-list fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="stat-card bg-danger shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="small opacity-75 fw-semibold">Perlu Verifikasi</div>
+                                        <h3 class="fw-bold mb-0 mt-1" id="adminStatUnverified">0</h3>
+                                    </div>
+                                    <i class="fas fa-clock fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="stat-card bg-warning text-dark shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="small fw-semibold">Sedang Diproses</div>
+                                        <h3 class="fw-bold mb-0 mt-1" id="adminStatProcessing">0</h3>
+                                    </div>
+                                    <i class="fas fa-tools fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="stat-card bg-success shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="small opacity-75 fw-semibold">Selesai Diperbaiki</div>
+                                        <h3 class="fw-bold mb-0 mt-1" id="adminStatDone">0</h3>
+                                    </div>
+                                    <i class="fas fa-check-circle fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart & Action Row -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-lg-6">
+                            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                                <h6 class="fw-bold mb-3"><i class="fas fa-chart-pie text-primary me-2"></i>Distribusi Status Laporan</h6>
+                                <div style="height: 220px; position: relative;">
+                                    <canvas id="chartStatus"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                                <h6 class="fw-bold mb-3"><i class="fas fa-chart-bar text-success me-2"></i>Kategori Kerusakan</h6>
+                                <div style="height: 220px; position: relative;">
+                                    <canvas id="chartCategory"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Management Table -->
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                        <div class="card-header bg-white p-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="fw-bold mb-0"><i class="fas fa-table text-primary me-2"></i>Kelola & Verifikasi Laporan Masuk</h6>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success btn-sm rounded-pill" onclick="exportDataCSV()">
+                                    <i class="fas fa-file-csv me-1"></i> Export CSV
+                                </button>
+                                <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="window.print()">
+                                    <i class="fas fa-print me-1"></i> Print
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Foto</th>
+                                        <th>Pelapor & Kategori</th>
+                                        <th>Deskripsi & Lokasi</th>
+                                        <th>Verifikasi</th>
+                                        <th>Status</th>
+                                        <th>Prioritas</th>
+                                        <th class="text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminTableBody">
+                                    <!-- Diisi via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // INITIAL MOCK DATA (Saved to localStorage on first load)
+        const DEFAULT_REPORTS = [
+            {
+                id: 1,
+                email: 'contohkasusjalan1@gmail.com',
+                jenis: 'Jalan Berlubang',
+                deskripsi: 'Terdapat lubang sedalam 30cm di tengah jalan utama Pasteur. Sangat membahayakan pengendara roda 2 pada malam hari.',
+                foto: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=80',
+                lat: -6.89228000,
+                lng: 107.58409000,
+                status: 'Diproses',
+                prioritas: 'tinggi',
+                verified: true,
+                tgl_lapor: '2026-02-10 09:30',
+                catatan_admin: 'Tim URC telah memasang barikade pengaman sementara. Penambalan aspal dijadwalkan besok.'
+            },
+            {
+                id: 2,
+                email: 'warga.lengkong@gmail.com',
+                jenis: 'Lampu Penerangan Jalan (PJU)',
+                deskripsi: 'Lampu jalan sepanjang 200m mati total sejak 3 hari lalu. Area Simpang Lima menjadi sangat gelap dan rawan kejahatan.',
+                foto: 'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=600&auto=format&fit=crop&q=80',
+                lat: -6.89174700,
+                lng: 107.61316500,
+                status: 'Baru',
+                prioritas: 'sedang',
+                verified: false,
+                tgl_lapor: '2026-03-01 19:15',
+                catatan_admin: 'Menunggu konfirmasi petugas Dishub / DPU.'
+            },
+            {
+                id: 3,
+                email: 'nizarnurfalah@example.com',
+                jenis: 'Trotoar / Drainase Rusak',
+                deskripsi: 'Tutup gorong-gorong pedestrian amblas dan saluran mampet mengakibatkan genangan air meluap saat hujan.',
+                foto: 'https://images.unsplash.com/photo-1541888946425-d0fbb180c5f5?w=600&auto=format&fit=crop&q=80',
+                lat: -6.89747800,
+                lng: 107.63133800,
+                status: 'Dijadwalkan',
+                prioritas: 'tinggi',
+                verified: true,
+                tgl_lapor: '2026-03-12 14:20',
+                catatan_admin: 'Material precast beton pengganti sedang dalam pengiriman ke lokasi.'
+            },
+            {
+                id: 4,
+                email: 'komunitas.gowes@gmail.com',
+                jenis: 'Jembatan Rusak',
+                deskripsi: 'Baut sambungan expansion joint jembatan longgar dan pagar pembatas jembatan retak berkarat.',
+                foto: 'https://images.unsplash.com/photo-1545459720-aac8509eb02c?w=600&auto=format&fit=crop&q=80',
+                lat: -6.91750000,
+                lng: 107.60620000,
+                status: 'Selesai',
+                prioritas: 'tinggi',
+                verified: true,
+                tgl_lapor: '2026-01-15 11:00',
+                catatan_admin: 'Perbaikan konstruksi dan pengelasan plat baja telah selesai 100% dan lolos uji beban.'
+            },
+            {
+                id: 5,
+                email: 'mahasiswa.bandung@gmail.com',
+                jenis: 'Fasilitas Publik Lainnya',
+                deskripsi: 'Halte bus taman kota atapnya jebol dan bangku tunggu patah tidak bisa diduduki.',
+                foto: 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=600&auto=format&fit=crop&q=80',
+                lat: -6.90230000,
+                lng: 107.61890000,
+                status: 'Baru',
+                prioritas: 'rendah',
+                verified: true,
+                tgl_lapor: '2026-03-25 16:45',
+                catatan_admin: ''
+            }
+        ];
+
+        // State & Variables
+        let reportsData = [];
+        let map;
+        let markersLayer;
+        let isPickingLocation = false;
+        let tempPickerMarker = null;
+        let chartStatusInstance = null;
+        let chartCategoryInstance = null;
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', () => {
+            loadReportsFromStorage();
+            initMap();
+            renderMarkers();
+            updateStatsUI();
+        });
+
+        function loadReportsFromStorage() {
+            const stored = localStorage.getItem('webgis_reports_data');
+            if (stored) {
+                try {
+                    reportsData = JSON.parse(stored);
+                } catch (e) {
+                    reportsData = [...DEFAULT_REPORTS];
+                }
+            } else {
+                reportsData = [...DEFAULT_REPORTS];
+                saveReportsToStorage();
+            }
+        }
+
+        function saveReportsToStorage() {
+            localStorage.setItem('webgis_reports_data', JSON.stringify(reportsData));
+        }
+
+        function resetDemoData() {
+            Swal.fire({
+                title: 'Reset Data Demo?',
+                text: 'Semua perubahan data laporan akan dikembalikan ke data awal.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Reset',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#2563eb'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    reportsData = JSON.parse(JSON.stringify(DEFAULT_REPORTS));
+                    saveReportsToStorage();
+                    renderMarkers();
+                    updateStatsUI();
+                    Swal.fire({ icon: 'success', title: 'Data Berhasil Direset!', timer: 1200, showConfirmButton: false });
+                }
+            });
+        }
+
+        // MAP SETUP
+        function initMap() {
+            map = L.map('map', {
+                center: [-6.90389, 107.61861], // Bandung Center
+                zoom: 13,
+                zoomControl: false
+            });
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // OpenStreetMap Tile Layer
+            const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // CartoDB Positron
+            const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CARTO'
+            });
+
+            // Satellite Layer
+            const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            });
+
+            L.control.layers({
+                "OpenStreetMap": osm,
+                "Clean Light (Carto)": cartoLight,
+                "Citra Satelit (Esri)": esriSat
+            }, null, { position: 'topright' }).addTo(map);
+
+            markersLayer = L.layerGroup().addTo(map);
+
+            // Map Click Event for Location Picker
+            map.on('click', function(e) {
+                if (!isPickingLocation) return;
+
+                const lat = e.latlng.lat.toFixed(7);
+                const lng = e.latlng.lng.toFixed(7);
+
+                document.getElementById('latInput').value = lat;
+                document.getElementById('lngInput').value = lng;
+                document.getElementById('coordHelp').classList.remove('d-none');
+
+                if (tempPickerMarker) {
+                    tempPickerMarker.setLatLng(e.latlng);
+                } else {
+                    tempPickerMarker = L.marker(e.latlng, {
+                        icon: L.divIcon({
+                            className: 'custom-picker-pin',
+                            html: '<div style="background:#2563eb; width:28px; height:28px; border-radius:50%; border:3px solid white; box-shadow:0 0 15px rgba(37,99,235,0.7); display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-map-pin"></i></div>',
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
+                        })
+                    }).addTo(map);
+                }
+
+                // Deactivate picker mode
+                isPickingLocation = false;
+                document.getElementById('locationPickerBanner').style.display = 'none';
+                openLaporPanel();
+
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    icon: 'success',
+                    title: `Lokasi dipilih: ${lat}, ${lng}`,
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            });
+        }
+
+        // RENDER MARKERS ON MAP
+        function renderMarkers() {
+            if (!markersLayer) return;
+            markersLayer.clearLayers();
+
+            const searchVal = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            const catVal = document.getElementById('filterCategory')?.value || 'ALL';
+            const statusVal = document.getElementById('filterStatus')?.value || 'ALL';
+
+            let visibleCount = 0;
+
+            reportsData.forEach(rep => {
+                // Filter matching
+                const matchSearch = rep.jenis.toLowerCase().includes(searchVal) || rep.deskripsi.toLowerCase().includes(searchVal);
+                const matchCat = catVal === 'ALL' || rep.jenis === catVal;
+                const matchStatus = statusVal === 'ALL' || rep.status === statusVal;
+
+                if (!matchSearch || !matchCat || !matchStatus) return;
+
+                visibleCount++;
+
+                // Icon class helper
+                let markerClass = 'marker-lainnya';
+                let iconClass = 'fa-landmark';
+
+                if (rep.jenis.includes('Jalan')) {
+                    markerClass = 'marker-jalan';
+                    iconClass = 'fa-road';
+                } else if (rep.jenis.includes('Lampu')) {
+                    markerClass = 'marker-lampu';
+                    iconClass = 'fa-lightbulb';
+                } else if (rep.jenis.includes('Trotoar') || rep.jenis.includes('Drainase')) {
+                    markerClass = 'marker-drainase';
+                    iconClass = 'fa-water';
+                } else if (rep.jenis.includes('Jembatan')) {
+                    markerClass = 'marker-jembatan';
+                    iconClass = 'fa-archway';
+                }
+
+                const customIcon = L.divIcon({
+                    className: 'custom-pin',
+                    html: `<div class="custom-div-marker ${markerClass}"><i class="fas ${iconClass}"></i></div>`,
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18],
+                    popupAnchor: [0, -18]
+                });
+
+                const marker = L.marker([rep.lat, rep.lng], { icon: customIcon });
+
+                const popupContent = `
+                    <div>
+                        <img src="${rep.foto}" class="popup-img" alt="${rep.jenis}">
+                        <div class="popup-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge badge-status-${rep.status} px-2 py-1 rounded-pill small">${rep.status}</span>
+                                <span class="badge badge-priority-${rep.prioritas} px-2 py-1 rounded-pill small text-uppercase">Prioritas ${rep.prioritas}</span>
+                            </div>
+                            <h6 class="fw-bold mb-1 text-dark" style="font-size: 0.95rem;">${rep.jenis}</h6>
+                            <p class="small text-muted mb-2" style="font-size: 0.8rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${rep.deskripsi}</p>
+                            <hr class="my-2">
+                            <div class="small text-muted d-flex justify-content-between" style="font-size: 0.72rem;">
+                                <span><i class="fas fa-calendar-alt me-1"></i>${rep.tgl_lapor}</span>
+                                <span><i class="fas fa-user me-1"></i>${rep.email.split('@')[0]}</span>
+                            </div>
+                            ${rep.catatan_admin ? `<div class="mt-2 p-2 bg-light rounded small border" style="font-size: 0.75rem;"><strong class="text-primary"><i class="fas fa-info-circle me-1"></i>Catatan Admin:</strong> ${rep.catatan_admin}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                markersLayer.addLayer(marker);
+            });
+
+            const badge = document.getElementById('totalCountBadge');
+            if (badge) badge.innerText = `${visibleCount} Data`;
+        }
+
+        function filterMarkers() {
+            renderMarkers();
+        }
+
+        function toggleFloatingPanel() {
+            document.getElementById('floatingPanel').classList.toggle('collapsed');
+        }
+
+        // SLIDE PANEL FOR CREATING REPORT
+        function openLaporPanel() {
+            document.getElementById('slidePanel').classList.add('active');
+        }
+
+        function closeLaporPanel() {
+            document.getElementById('slidePanel').classList.remove('active');
+            if (tempPickerMarker) {
+                map.removeLayer(tempPickerMarker);
+                tempPickerMarker = null;
+            }
+        }
+
+        function activateLocationPicker() {
+            closeLaporPanel();
+            isPickingLocation = true;
+            document.getElementById('locationPickerBanner').style.display = 'block';
+            Swal.fire({
+                toast: true,
+                position: 'top',
+                icon: 'info',
+                title: 'Silakan klik lokasi titik kerusakan di peta',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+
+        function getCurrentGPS() {
+            if (!navigator.geolocation) {
+                Swal.fire('GPS Tidak Didukung', 'Browser Anda tidak mendukung geolokasi.', 'warning');
+                return;
+            }
+
+            Swal.showLoading();
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    Swal.close();
+                    const lat = pos.coords.latitude.toFixed(7);
+                    const lng = pos.coords.longitude.toFixed(7);
+                    document.getElementById('latInput').value = lat;
+                    document.getElementById('lngInput').value = lng;
+                    document.getElementById('coordHelp').classList.remove('d-none');
+                    map.setView([lat, lng], 16);
+                },
+                (err) => {
+                    Swal.close();
+                    // Fallback to random bandung spot if GPS denied
+                    const fallbackLat = (-6.90389 + (Math.random() - 0.5) * 0.03).toFixed(7);
+                    const fallbackLng = (107.61861 + (Math.random() - 0.5) * 0.03).toFixed(7);
+                    document.getElementById('latInput').value = fallbackLat;
+                    document.getElementById('lngInput').value = fallbackLng;
+                    document.getElementById('coordHelp').classList.remove('d-none');
+                    map.setView([fallbackLat, fallbackLng], 15);
+                    Swal.fire({
+                        toast: true,
+                        position: 'top',
+                        icon: 'info',
+                        title: 'GPS simulasi titik terpasang!',
+                        showConfirmButton: false,
+                        timer: 2000
+                    });
+                },
+                { timeout: 8000 }
+            );
+        }
+
+        function previewImage(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('imagePreview');
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('d-none');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('emailInput').value.trim();
+            const jenis = document.getElementById('jenisInput').value;
+            const deskripsi = document.getElementById('deskripsiInput').value.trim();
+            const lat = parseFloat(document.getElementById('latInput').value);
+            const lng = parseFloat(document.getElementById('lngInput').value);
+            const imagePreview = document.getElementById('imagePreview').src;
+
+            const fallbackPhotos = [
+                'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=80',
+                'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=600&auto=format&fit=crop&q=80',
+                'https://images.unsplash.com/photo-1541888946425-d0fbb180c5f5?w=600&auto=format&fit=crop&q=80'
+            ];
+            const chosenFoto = imagePreview && imagePreview.startsWith('data:') ? imagePreview : fallbackPhotos[Math.floor(Math.random() * fallbackPhotos.length)];
+
+            const newReport = {
+                id: Date.now(),
+                email: email,
+                jenis: jenis,
+                deskripsi: deskripsi,
+                foto: chosenFoto,
+                lat: lat,
+                lng: lng,
+                status: 'Baru',
+                prioritas: 'sedang',
+                verified: false,
+                tgl_lapor: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                catatan_admin: 'Menunggu verifikasi admin.'
+            };
+
+            reportsData.unshift(newReport);
+            saveReportsToStorage();
+            renderMarkers();
+            updateStatsUI();
+
+            closeLaporPanel();
+            document.getElementById('formLapor').reset();
+            document.getElementById('imagePreview').classList.add('d-none');
+            document.getElementById('coordHelp').classList.add('d-none');
+
+            map.setView([lat, lng], 16);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Laporan Berhasil Terkirim!',
+                text: 'Terima kasih atas kepedulian Anda. Laporan Anda sudah muncul di peta dan sedang menunggu verifikasi tim.',
+                confirmButtonColor: '#2563eb'
+            });
+        }
+
+        // MODAL: CEK LAPORAN SAYA
+        function openLaporanSayaModal() {
+            const modal = new bootstrap.Modal(document.getElementById('laporanSayaModal'));
+            modal.show();
+            searchUserReports();
+        }
+
+        function searchUserReports() {
+            const email = (document.getElementById('searchEmailInput').value || '').trim().toLowerCase();
+            const container = document.getElementById('userReportsResult');
+
+            const filtered = reportsData.filter(r => r.email.toLowerCase() === email);
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-folder-open fs-1 opacity-50 mb-2"></i>
+                        <p class="mb-0">Tidak ditemukan laporan dengan email <strong>${email || '-'}</strong>.</p>
+                        <small>Pastikan email sesuai saat Anda membuat laporan.</small>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `<div class="d-flex flex-column gap-3">`;
+            filtered.forEach(rep => {
+                html += `
+                    <div class="card border rounded-3 p-3">
+                        <div class="d-flex gap-3 align-items-center">
+                            <img src="${rep.foto}" class="rounded" style="width: 80px; height: 80px; object-fit: cover;" alt="">
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="fw-bold mb-0 text-dark">${rep.jenis}</h6>
+                                    <span class="badge badge-status-${rep.status} px-2 py-1 rounded-pill">${rep.status}</span>
+                                </div>
+                                <p class="small text-muted mb-1" style="font-size: 0.8rem;">${rep.deskripsi}</p>
+                                <div class="small text-secondary" style="font-size: 0.75rem;">
+                                    <i class="fas fa-calendar-alt me-1"></i> ${rep.tgl_lapor} | 
+                                    <span class="${rep.verified ? 'text-success' : 'text-danger'}">
+                                        <i class="fas ${rep.verified ? 'fa-check-circle' : 'fa-clock'} me-1"></i>
+                                        ${rep.verified ? 'Terverifikasi' : 'Belum Diverifikasi'}
+                                    </span>
+                                </div>
+                                ${rep.catatan_admin ? `<div class="mt-2 p-2 bg-light rounded small border" style="font-size: 0.75rem;"><strong class="text-primary">Catatan Tim:</strong> ${rep.catatan_admin}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // MODAL: ADMIN DASHBOARD
+        function openAdminModal() {
+            renderAdminDashboard();
+            const modal = new bootstrap.Modal(document.getElementById('adminModal'));
+            modal.show();
+        }
+
+        function renderAdminDashboard() {
+            // Update Stats Count
+            const total = reportsData.length;
+            const unverified = reportsData.filter(r => !r.verified).length;
+            const processing = reportsData.filter(r => r.status === 'Diproses' || r.status === 'Dijadwalkan').length;
+            const done = reportsData.filter(r => r.status === 'Selesai').length;
+
+            document.getElementById('adminStatTotal').innerText = total;
+            document.getElementById('adminStatUnverified').innerText = unverified;
+            document.getElementById('adminStatProcessing').innerText = processing;
+            document.getElementById('adminStatDone').innerText = done;
+
+            // Render Charts
+            renderCharts();
+
+            // Render Table
+            renderAdminTable();
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTableBody');
+            tbody.innerHTML = '';
+
+            reportsData.forEach(rep => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold text-muted">#${rep.id.toString().slice(-4)}</td>
+                    <td>
+                        <img src="${rep.foto}" class="rounded shadow-sm" style="width: 45px; height: 45px; object-fit: cover;" alt="">
+                    </td>
+                    <td>
+                        <div class="fw-semibold text-dark">${rep.jenis}</div>
+                        <small class="text-muted">${rep.email}</small>
+                    </td>
+                    <td style="max-width: 220px;">
+                        <div class="text-truncate" title="${rep.deskripsi}">${rep.deskripsi}</div>
+                        <small class="text-secondary"><i class="fas fa-map-marker-alt text-danger me-1"></i>${rep.lat}, ${rep.lng}</small>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm ${rep.verified ? 'btn-success' : 'btn-outline-danger'} rounded-pill px-2 py-0 fw-semibold" style="font-size: 0.72rem;" onclick="toggleAdminVerify(${rep.id})">
+                            <i class="fas ${rep.verified ? 'fa-check' : 'fa-times'} me-1"></i>${rep.verified ? 'Disetujui' : 'Verifikasi'}
+                        </button>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm py-0 ps-2 pe-4" style="font-size: 0.75rem; width: 110px;" onchange="updateReportStatus(${rep.id}, this.value)">
+                            <option value="Baru" ${rep.status === 'Baru' ? 'selected' : ''}>🔴 Baru</option>
+                            <option value="Diproses" ${rep.status === 'Diproses' ? 'selected' : ''}>🟠 Diproses</option>
+                            <option value="Dijadwalkan" ${rep.status === 'Dijadwalkan' ? 'selected' : ''}>🔵 Dijadwalkan</option>
+                            <option value="Selesai" ${rep.status === 'Selesai' ? 'selected' : ''}>🟢 Selesai</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm py-0 ps-2 pe-4" style="font-size: 0.75rem; width: 100px;" onchange="updateReportPriority(${rep.id}, this.value)">
+                            <option value="tinggi" ${rep.prioritas === 'tinggi' ? 'selected' : ''}>Tinggi</option>
+                            <option value="sedang" ${rep.prioritas === 'sedang' ? 'selected' : ''}>Sedang</option>
+                            <option value="rendah" ${rep.prioritas === 'rendah' ? 'selected' : ''}>Rendah</option>
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary rounded-circle p-1 me-1" onclick="editAdminNote(${rep.id})" title="Catatan Admin">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger rounded-circle p-1" onclick="deleteReport(${rep.id})" title="Hapus Laporan">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleAdminVerify(id) {
+            const report = reportsData.find(r => r.id === id);
+            if (report) {
+                report.verified = !report.verified;
+                saveReportsToStorage();
+                renderAdminDashboard();
+                renderMarkers();
+            }
+        }
+
+        function updateReportStatus(id, newStatus) {
+            const report = reportsData.find(r => r.id === id);
+            if (report) {
+                report.status = newStatus;
+                saveReportsToStorage();
+                renderAdminDashboard();
+                renderMarkers();
+            }
+        }
+
+        function updateReportPriority(id, newPriority) {
+            const report = reportsData.find(r => r.id === id);
+            if (report) {
+                report.prioritas = newPriority;
+                saveReportsToStorage();
+                renderAdminDashboard();
+                renderMarkers();
+            }
+        }
+
+        function editAdminNote(id) {
+            const report = reportsData.find(r => r.id === id);
+            if (!report) return;
+
+            Swal.fire({
+                title: 'Catatan & Tindak Lanjut Tim',
+                input: 'textarea',
+                inputValue: report.catatan_admin || '',
+                inputPlaceholder: 'Tuliskan catatan progres atau jadwal perbaikan...',
+                showCancelButton: true,
+                confirmButtonText: 'Simpan Catatan',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#2563eb'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    report.catatan_admin = res.value;
+                    saveReportsToStorage();
+                    renderAdminDashboard();
+                    renderMarkers();
+                    Swal.fire({ icon: 'success', title: 'Catatan Disimpan', timer: 1000, showConfirmButton: false });
+                }
+            });
+        }
+
+        function deleteReport(id) {
+            Swal.fire({
+                title: 'Hapus Laporan Ini?',
+                text: 'Data laporan akan dihapus dari sistem.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#ef4444'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    reportsData = reportsData.filter(r => r.id !== id);
+                    saveReportsToStorage();
+                    renderAdminDashboard();
+                    renderMarkers();
+                    updateStatsUI();
+                    Swal.fire({ icon: 'success', title: 'Laporan Dihapus', timer: 1000, showConfirmButton: false });
+                }
+            });
+        }
+
+        function renderCharts() {
+            // Status distribution
+            const counts = {
+                'Baru': reportsData.filter(r => r.status === 'Baru').length,
+                'Diproses': reportsData.filter(r => r.status === 'Diproses').length,
+                'Dijadwalkan': reportsData.filter(r => r.status === 'Dijadwalkan').length,
+                'Selesai': reportsData.filter(r => r.status === 'Selesai').length,
+            };
+
+            const ctxStatus = document.getElementById('chartStatus').getContext('2d');
+            if (chartStatusInstance) chartStatusInstance.destroy();
+            chartStatusInstance = new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Baru', 'Diproses', 'Dijadwalkan', 'Selesai'],
+                    datasets: [{
+                        data: [counts['Baru'], counts['Diproses'], counts['Dijadwalkan'], counts['Selesai']],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            // Category counts
+            const catMap = {};
+            reportsData.forEach(r => {
+                catMap[r.jenis] = (catMap[r.jenis] || 0) + 1;
+            });
+
+            const ctxCategory = document.getElementById('chartCategory').getContext('2d');
+            if (chartCategoryInstance) chartCategoryInstance.destroy();
+            chartCategoryInstance = new Chart(ctxCategory, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(catMap),
+                    datasets: [{
+                        label: 'Jumlah Laporan',
+                        data: Object.values(catMap),
+                        backgroundColor: '#2563eb',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+        }
+
+        function exportDataCSV() {
+            let csv = "ID,Email,Kategori,Deskripsi,Latitude,Longitude,Status,Prioritas,Tanggal\n";
+            reportsData.forEach(r => {
+                csv += `"${r.id}","${r.email}","${r.jenis}","${r.deskripsi.replace(/"/g, '""')}","${r.lat}","${r.lng}","${r.status}","${r.prioritas}","${r.tgl_lapor}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `laporan_fasilitas_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function updateStatsUI() {
+            const badge = document.getElementById('totalCountBadge');
+            if (badge) badge.innerText = `${reportsData.length} Data`;
+        }
+    </script>
+</body>
+</html>
